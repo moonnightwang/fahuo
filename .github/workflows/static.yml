@@ -125,11 +125,11 @@
 
     <!-- 主页面内容 (默认隐藏) -->
     <div id="mainContent" class="hidden">
-        <div class="container mx-auto px-4 py-8 max-w-5xl">
+        <div class="container mx-auto px-4 py-8 max-w-6xl">
             <!-- 页面标题 -->
             <header class="text-center mb-10">
                 <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-dark mb-2">发货信息记录系统</h1>
-                                <div class="mt-4">
+                <div class="mt-4">
                     <button id="logoutBtn" class="text-sm text-neutral hover:text-primary transition-colors">
                         <i class="fa fa-sign-out mr-1"></i> 退出登录
                     </button>
@@ -375,6 +375,7 @@
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">转接头</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数量</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">记录时间</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">备注</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                                     </tr>
                                 </thead>
@@ -413,6 +414,27 @@
                 </div>
             </div>
             
+            <!-- 编辑备注模态框 -->
+            <div id="editRemarkModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto animate-fadeIn">
+                    <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                        <h3 class="text-xl font-semibold text-dark">编辑备注</h3>
+                        <button id="closeEditRemarkModalBtn" class="text-gray-400 hover:text-gray-600">
+                            <i class="fa fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <textarea id="editRemarkTextarea" rows="5" 
+                            class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus"
+                            placeholder="请输入备注信息..."></textarea>
+                    </div>
+                    <div class="p-4 border-t border-gray-200 flex justify-end gap-3">
+                        <button id="cancelEditRemarkBtn" class="btn-secondary">取消</button>
+                        <button id="saveEditRemarkBtn" class="btn-primary">保存</button>
+                    </div>
+                </div>
+            </div>
+            
             <!-- 页脚 -->
             <footer class="mt-12 text-center text-neutral text-sm">
                 <p>发货信息记录系统 &copy; 2025</p>
@@ -432,6 +454,7 @@
         let allShippingRecords = [];
         let recordIdCounter = 1; // 用于生成唯一ID
         let searchQuery = '';
+        let currentEditingRemarkId = null; // 当前正在编辑的备注ID
         
         // DOM元素
         const passwordPage = document.getElementById('passwordPage');
@@ -463,6 +486,13 @@
         const recordDetailContent = document.getElementById('recordDetailContent');
         const closeModalBtn = document.getElementById('closeModalBtn');
         const closeModalBtn2 = document.getElementById('closeModalBtn2');
+        
+        // 编辑备注相关元素
+        const editRemarkModal = document.getElementById('editRemarkModal');
+        const editRemarkTextarea = document.getElementById('editRemarkTextarea');
+        const closeEditRemarkModalBtn = document.getElementById('closeEditRemarkModalBtn');
+        const cancelEditRemarkBtn = document.getElementById('cancelEditRemarkBtn');
+        const saveEditRemarkBtn = document.getElementById('saveEditRemarkBtn');
         
         // 初始化应用
         function initApp() {
@@ -502,6 +532,12 @@
             
             if (savedRecords) {
                 allShippingRecords = JSON.parse(savedRecords);
+                // 确保每条记录都有remark属性
+                allShippingRecords.forEach(record => {
+                    if (record.remark === undefined) {
+                        record.remark = '';
+                    }
+                });
                 updateRecordsTable();
                 if (allShippingRecords.length > 0) {
                     recordsSection.classList.remove('hidden');
@@ -529,6 +565,19 @@
                     closeDetailModal();
                 }
             });
+            
+            // 编辑备注模态框事件
+            closeEditRemarkModalBtn.addEventListener('click', closeEditRemarkModal);
+            cancelEditRemarkBtn.addEventListener('click', closeEditRemarkModal);
+            
+            editRemarkModal.addEventListener('click', function(e) {
+                if (e.target === editRemarkModal) {
+                    closeEditRemarkModal();
+                }
+            });
+            
+            // 保存备注事件
+            saveEditRemarkBtn.addEventListener('click', saveRemark);
         }
         
         // 检查密码
@@ -661,8 +710,9 @@
                     }
                 });
                 
-                // 为当前记录添加唯一ID
+                // 为当前记录添加唯一ID和备注属性
                 currentShippingInfo.id = recordIdCounter++;
+                currentShippingInfo.remark = ''; // 初始备注为空
                 
                 if (existingIndex !== -1) {
                     // 替换现有记录
@@ -710,7 +760,8 @@
                     '打包方式': record.packingMethod === 'foam' ? '泡沫袋' : '盒子',
                     '物流单号': record.trackingNumber || '',
                     '快递地址': record.address,
-                    '记录时间': record.timestamp
+                    '记录时间': record.timestamp,
+                    '备注': record.remark || '' // 新增备注导出
                 };
             });
             
@@ -746,7 +797,7 @@
             // 应用搜索过滤
             if (searchQuery) {
                 sortedRecords = sortedRecords.filter(record => {
-                    // 构建搜索内容字符串
+                    // 构建搜索内容字符串，包含备注信息
                     let searchContent = `${record.productType === 'wifi' ? 'WIFI' : '蓝牙'} `;
                     searchContent += `${record.quantity} `;
                     searchContent += `${record.adapter || ''} `;
@@ -759,7 +810,8 @@
                     searchContent += `${record.packingMethod === 'foam' ? '泡沫袋' : '盒子'} `;
                     searchContent += `${record.trackingNumber || ''} `;
                     searchContent += `${record.address} `;
-                    searchContent += `${record.timestamp}`;
+                    searchContent += `${record.timestamp} `;
+                    searchContent += `${record.remark || ''}`; // 搜索包含备注内容
                     
                     return searchContent.toLowerCase().includes(searchQuery);
                 });
@@ -781,6 +833,9 @@
                         ? record.wifiMac 
                         : record.bluetoothData;
                     
+                    // 处理备注显示，为空时显示"无"
+                    const remarkDisplay = record.remark.trim() || '无';
+                    
                     row.innerHTML = `
                         <td class="px-4 py-3 whitespace-nowrap">
                             <div class="text-sm text-gray-900">${record.productType === 'wifi' ? 'WIFI' : '蓝牙'}</div>
@@ -797,9 +852,15 @@
                         <td class="px-4 py-3 whitespace-nowrap">
                             <div class="text-sm text-gray-900">${record.timestamp}</div>
                         </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 truncate max-w-xs">${remarkDisplay}</div>
+                        </td>
                         <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
                             <button class="text-primary hover:text-primary/80 view-record mr-3" data-id="${record.id}">
                                 <i class="fa fa-eye"></i> 查看
+                            </button>
+                            <button class="text-blue-600 hover:text-blue-900 edit-remark mr-3" data-id="${record.id}">
+                                <i class="fa fa-edit"></i> 备注
                             </button>
                             <button class="text-red-600 hover:text-red-900 delete-record" data-id="${record.id}">
                                 <i class="fa fa-trash-o"></i> 删除
@@ -810,7 +871,7 @@
                     recordsTableBody.appendChild(row);
                 });
                 
-                // 为查看和删除按钮添加事件
+                // 为查看、删除和修改备注按钮添加事件
                 document.querySelectorAll('.view-record').forEach(btn => {
                     btn.addEventListener('click', function() {
                         const id = parseInt(this.getAttribute('data-id'));
@@ -824,6 +885,13 @@
                         deleteRecord(id);
                     });
                 });
+                
+                document.querySelectorAll('.edit-remark').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const id = parseInt(this.getAttribute('data-id'));
+                        editRemark(id);
+                    });
+                });
             }
         }
         
@@ -831,7 +899,12 @@
         function viewRecordDetail(id) {
             const record = allShippingRecords.find(r => r.id === id);
             if (record) {
-                recordDetailContent.textContent = record.text;
+                // 构建包含备注的详情文本
+                let detailText = record.text;
+                if (record.remark && record.remark.trim()) {
+                    detailText += `\n备注: ${record.remark}`;
+                }
+                recordDetailContent.textContent = detailText;
                 recordDetailModal.classList.remove('hidden');
                 // 防止背景滚动
                 document.body.style.overflow = 'hidden';
@@ -843,6 +916,48 @@
             recordDetailModal.classList.add('hidden');
             // 恢复背景滚动
             document.body.style.overflow = '';
+        }
+        
+        // 编辑备注
+        function editRemark(id) {
+            const record = allShippingRecords.find(r => r.id === id);
+            if (record) {
+                currentEditingRemarkId = id;
+                editRemarkTextarea.value = record.remark || '';
+                editRemarkModal.classList.remove('hidden');
+                document.body.style.overflow = 'hidden';
+                
+                // 自动聚焦到文本框
+                setTimeout(() => {
+                    editRemarkTextarea.focus();
+                }, 100);
+            }
+        }
+        
+        // 保存备注
+        function saveRemark() {
+            if (currentEditingRemarkId !== null) {
+                const record = allShippingRecords.find(r => r.id === currentEditingRemarkId);
+                if (record) {
+                    const newRemark = editRemarkTextarea.value.trim();
+                    record.remark = newRemark;
+                    
+                    // 更新显示
+                    updateRecordsTable();
+                    saveRecordsToLocalStorage();
+                    
+                    showNotification('备注已保存', 'success');
+                    closeEditRemarkModal();
+                }
+            }
+        }
+        
+        // 关闭编辑备注模态框
+        function closeEditRemarkModal() {
+            editRemarkModal.classList.add('hidden');
+            document.body.style.overflow = '';
+            currentEditingRemarkId = null;
+            editRemarkTextarea.value = '';
         }
         
         // 更新记录计数
@@ -1001,7 +1116,8 @@
                 trackingNumber,
                 address,
                 timestamp,
-                text: infoText
+                text: infoText,
+                remark: '' // 新增备注字段，初始为空
             };
             
             // 更新UI和全局变量
@@ -1033,4 +1149,3 @@
     </script>
 </body>
 </html>
-    
