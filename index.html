@@ -371,7 +371,7 @@
                                 <thead class="bg-gray-50 sticky top-0 z-10">
                                     <tr>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">产品类型</th>
-                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">关键标识</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking tracking-wider">关键标识</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">转接头</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数量</th>
                                         <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">记录时间</th>
@@ -640,10 +640,17 @@
             });
         });
         
-        // 生成信息按钮点击事件
+        // 生成信息按钮点击事件 - 修改后自动复制并添加到记录
         generateBtn.addEventListener('click', function() {
             if (validateForm()) {
                 generateShippingInfo();
+                
+                // 自动复制信息
+                copyBtn.click();
+                
+                // 自动添加到已记录数据
+                addExcelBtn.click();
+                
                 // 显示结果区域
                 resultSection.classList.remove('hidden');
                 
@@ -653,7 +660,7 @@
                     resultSection.classList.remove('animate-fadeIn');
                 }, 300);
                 
-                showNotification('信息已生成', 'success');
+                showNotification('信息已生成并自动添加到记录', 'success');
             }
         });
         
@@ -729,6 +736,7 @@
                 
                 // 更新表格显示
                 updateRecordsTable();
+                recordsCount.textContent = `${allShippingRecords.length} 条记录`;
                 recordsSection.classList.remove('hidden');
                 updateRecordCount();
             }
@@ -761,7 +769,7 @@
                     '物流单号': record.trackingNumber || '',
                     '快递地址': record.address,
                     '记录时间': record.timestamp,
-                    '备注': record.remark || '' // 新增备注导出
+                    '备注': record.remark || ''
                 };
             });
             
@@ -784,7 +792,7 @@
             localStorage.setItem('recordIdCounter', recordIdCounter.toString());
         }
         
-        // 更新记录表格
+        // 更新记录表格 - 修改后关键标识显示名称
         function updateRecordsTable() {
             // 清空表格
             recordsTableBody.innerHTML = '';
@@ -828,10 +836,13 @@
                     const row = document.createElement('tr');
                     row.className = 'hover:bg-gray-50 transition-colors';
                     
-                    // 确定关键标识（MAC地址或蓝牙数据）
-                    const keyIdentifier = record.productType === 'wifi' 
-                        ? record.wifiMac 
-                        : record.bluetoothData;
+                    // 确定关键标识（显示名称）
+                    let keyIdentifier = '';
+                    if (record.productType === 'wifi') {
+                        keyIdentifier = record.wifiName;
+                    } else {
+                        keyIdentifier = record.bluetoothName || record.bluetoothData;
+                    }
                     
                     // 处理备注显示，为空时显示"无"
                     const remarkDisplay = record.remark.trim() || '无';
@@ -841,7 +852,7 @@
                             <div class="text-sm text-gray-900">${record.productType === 'wifi' ? 'WIFI' : '蓝牙'}</div>
                         </td>
                         <td class="px-4 py-3 whitespace-nowrap">
-                            <div class="text-sm text-gray-900 truncate max-w-xs">${keyIdentifier}</div>
+                            <div class="text-sm text-gray-900 truncate max-w-xs">${keyIdentifier || '无名称'}</div>
                         </td>
                         <td class="px-4 py-3 whitespace-nowrap">
                             <div class="text-sm text-gray-900 truncate max-w-xs">${record.adapter}</div>
@@ -981,7 +992,7 @@
             }
         }
         
-        // 表单验证 - 强化了转接头的验证
+        // 表单验证
         function validateForm() {
             const productType = document.querySelector('input[name="productType"]:checked').value;
             const quantity = document.getElementById('quantity').value;
@@ -1038,7 +1049,7 @@
             return true;
         }
         
-        // 生成发货信息 - 不仅生成文本，还生成结构化数据
+        // 生成发货信息
         function generateShippingInfo() {
             const productType = document.querySelector('input[name="productType"]:checked').value;
             const adapterType = adapterTypeSelect.value;
