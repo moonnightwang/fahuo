@@ -1,43 +1,1036 @@
-# Simple workflow for deploying static content to GitHub Pages
-name: Deploy static content to Pages
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发货信息记录系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- 引入SheetJS库用于处理Excel文件 -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- Tailwind配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        danger: '#EF4444',
+                        neutral: '#6B7280',
+                        light: '#F3F4F6',
+                        dark: '#1F2937'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .form-input-focus {
+                @apply focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none;
+            }
+            .card-hover {
+                @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+            }
+            .btn-primary {
+                @apply bg-primary text-white px-4 py-2 rounded-lg transition-all duration-300 hover:bg-primary/90 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/50;
+            }
+            .btn-secondary {
+                @apply bg-gray-200 text-gray-800 px-4 py-2 rounded-lg transition-all duration-300 hover:bg-gray-300 active:scale-95 focus:outline-none focus:ring-2 focus:ring-gray-400/50;
+            }
+            .animate-fadeIn {
+                animation: fadeIn 0.3s ease-in-out;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            /* 表格滚动容器样式 */
+            .table-scroll-container {
+                max-height: 312px; /* 大约5行的高度 */
+                overflow-y: auto;
+                scrollbar-width: thin;
+            }
+            .table-scroll-container::-webkit-scrollbar {
+                width: 6px;
+            }
+            .table-scroll-container::-webkit-scrollbar-track {
+                background: #f1f1f1;
+                border-radius: 10px;
+            }
+            .table-scroll-container::-webkit-scrollbar-thumb {
+                background: #c1c1c1;
+                border-radius: 10px;
+            }
+            .table-scroll-container::-webkit-scrollbar-thumb:hover {
+                background: #a1a1a1;
+            }
+            /* 密码页面样式 */
+            .password-container {
+                min-height: 100vh;
+                background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            }
+            .password-card {
+                backdrop-filter: blur(10px);
+                background-color: rgba(255, 255, 255, 0.8);
+                transition: all 0.3s ease;
+            }
+            .password-card:hover {
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+                transform: translateY(-5px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 密码登录页面 -->
+    <div id="passwordPage" class="password-container flex items-center justify-center p-4">
+        <div class="password-card w-full max-w-md p-8 rounded-2xl shadow-lg">
+            <div class="text-center mb-6">
+                <h1 class="text-[clamp(1.5rem,4vw,2rem)] font-bold text-dark mb-2">发货信息记录系统</h1>
+                <p class="text-neutral">请输入密码以访问系统</p>
+            </div>
+            
+            <form id="passwordForm" class="space-y-4">
+                <div>
+                    <label for="password" class="block text-sm font-medium text-neutral mb-1">密码</label>
+                    <div class="relative">
+                        <input type="password" id="password" 
+                            class="w-full px-4 py-3 border border-gray-300 rounded-lg form-input-focus pr-10"
+                            placeholder="请输入密码">
+                        <button type="button" id="togglePassword" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                            <i class="fa fa-eye-slash"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="pt-2">
+                    <button type="submit" class="w-full btn-primary flex items-center justify-center">
+                        <i class="fa fa-unlock-alt mr-2"></i> 登录
+                    </button>
+                </div>
+                
+                <p id="passwordError" class="text-danger text-sm mt-2 hidden text-center">密码错误，请重试</p>
+            </form>
+        </div>
+    </div>
 
-on:
-  # Runs on pushes targeting the default branch
-  push:
-    branches: ["main"]
+    <!-- 主页面内容 (默认隐藏) -->
+    <div id="mainContent" class="hidden">
+        <div class="container mx-auto px-4 py-8 max-w-5xl">
+            <!-- 页面标题 -->
+            <header class="text-center mb-10">
+                <h1 class="text-[clamp(1.8rem,5vw,2.5rem)] font-bold text-dark mb-2">发货信息记录系统</h1>
+                                <div class="mt-4">
+                    <button id="logoutBtn" class="text-sm text-neutral hover:text-primary transition-colors">
+                        <i class="fa fa-sign-out mr-1"></i> 退出登录
+                    </button>
+                </div>
+            </header>
+            
+            <!-- 主内容区 -->
+            <main class="space-y-8">
+                <!-- 表单卡片 -->
+                <div class="bg-white rounded-xl shadow shadow-md p-6 card-hover">
+                    <form id="shippingForm" class="space-y-6">
+                        <!-- 产品信息 -->
+                        <section>
+                            <h2 class="text-xl font-semibold text-dark mb-4 flex items-center">
+                                <i class="fa fa-cube text-primary mr-2"></i>产品信息
+                            </h2>
+                            <div class="grid md:grid-cols-2 gap-4">
+                                <!-- 产品类型选择 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="productType">
+                                        产品类型 <span class="text-red-500">*</span>
+                                    </label>
+                                    <div class="flex space-x-4">
+                                        <label class="inline-flex items-center cursor-pointer">
+                                            <input type="radio" name="productType" value="wifi" class="form-radio h-4 w-4 text-primary" checked>
+                                            <span class="ml-2 text-sm text-dark">WIFI</span>
+                                        </label>
+                                        <label class="inline-flex items-center cursor-pointer">
+                                            <input type="radio" name="productType" value="bluetooth" class="form-radio h-4 w-4 text-primary">
+                                            <span class="ml-2 text-sm text-dark">蓝牙</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <!-- 转接头 (选项+自定义) - 已设置为必填 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="adapterType">
+                                        转接头 <span class="text-red-500">*</span>
+                                    </label>
+                                    <div class="space-y-2">
+                                        <select id="adapterType" name="adapterType" required
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus">
+                                            <option value="">请选择转接头类型</option>
+                                            <option value="安卓转接头">安卓转接头</option>
+                                            <option value="苹果转接头">苹果转接头</option>
+                                            <option value="双转接头">双转接头</option>
+                                            <option value="自定义">自定义</option>
+                                        </select>
+                                        <input type="text" id="customAdapter" name="customAdapter" 
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus hidden"
+                                            placeholder="请输入自定义转接头信息" required>
+                                    </div>
+                                </div>
+                                
+                                <!-- 数量 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="quantity">
+                                        数量 <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="number" id="quantity" name="quantity" min="1" value="1"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus"
+                                        placeholder="请输入数量" required>
+                                </div>
+                            </div>
+                        </section>
+                        
+                        <!-- 产品配置 - 根据产品类型动态显示 -->
+                        <section id="productConfig">
+                            <h2 class="text-xl font-semibold text-dark mb-4 flex items-center">
+                                <i class="fa fa-sliders text-primary mr-2"></i>产品配置
+                            </h2>
+                            
+                            <!-- WIFI配置 -->
+                            <div id="wifiConfig" class="grid md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="wifiName">
+                                        WIFI名称 <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="text" id="wifiName" name="wifiName"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus"
+                                        placeholder="请输入WIFI名称" required>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="wifiMac">
+                                        WIFI MAC <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="text" id="wifiMac" name="wifiMac"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus"
+                                        placeholder="请输入WIFI MAC地址" required>
+                                </div>
+                            </div>
+                            
+                            <!-- 蓝牙配置 -->
+                            <div id="bluetoothConfig" class="grid md:grid-cols-2 gap-4 hidden">
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="bluetoothName">
+                                        蓝牙名称
+                                        <span class="text-xs text-gray-400 ml-1">(非必填)</span>
+                                    </label>
+                                    <input type="text" id="bluetoothName" name="bluetoothName"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus"
+                                        placeholder="请输入蓝牙名称（可选）">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="bluetoothMac">
+                                        蓝牙MAC
+                                        <span class="text-xs text-gray-400 ml-1">(非必填)</span>
+                                    </label>
+                                    <input type="text" id="bluetoothMac" name="bluetoothMac"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus"
+                                        placeholder="请输入蓝牙MAC地址（可选）">
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="bluetoothData">
+                                        蓝牙数据 <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="text" id="bluetoothData" name="bluetoothData"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus"
+                                        placeholder="请输入蓝牙数据" required>
+                                </div>
+                            </div>
+                        </section>
+                        
+                        <!-- 物流信息 -->
+                        <section>
+                            <h2 class="text-xl font-semibold text-dark mb-4 flex items-center">
+                                <i class="fa fa-truck text-primary mr-2"></i>物流信息
+                            </h2>
+                            <div class="grid md:grid-cols-2 gap-4">
+                                <!-- 快递方式 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1">
+                                        快递方式 <span class="text-red-500">*</span>
+                                    </label>
+                                    <div class="flex space-x-4">
+                                        <label class="inline-flex items-center cursor-pointer">
+                                            <input type="radio" name="deliveryMethod" value="shentong" class="form-radio h-4 w-4 text-primary" checked>
+                                            <span class="ml-2 text-sm text-dark">申通</span>
+                                        </label>
+                                        <label class="inline-flex items-center cursor-pointer">
+                                            <input type="radio" name="deliveryMethod" value="shunfeng" class="form-radio h-4 w-4 text-primary">
+                                            <span class="ml-2 text-sm text-dark">顺丰</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <!-- 打包方式 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1">
+                                        打包方式 <span class="text-red-500">*</span>
+                                    </label>
+                                    <div class="flex space-x-4">
+                                        <label class="inline-flex items-center cursor-pointer">
+                                            <input type="radio" name="packingMethod" value="foam" class="form-radio h-4 w-4 text-primary" checked>
+                                            <span class="ml-2 text-sm text-dark">泡沫袋</span>
+                                        </label>
+                                        <label class="inline-flex items-center cursor-pointer">
+                                            <input type="radio" name="packingMethod" value="box" class="form-radio h-4 w-4 text-primary">
+                                            <span class="ml-2 text-sm text-dark">盒子</span>
+                                        </label>
+                                    </div>
+                                </div>
+                                
+                                <!-- 物流单号 -->
+                                <div>
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="trackingNumber">
+                                        物流单号
+                                    </label>
+                                    <input type="text" id="trackingNumber" name="trackingNumber"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus"
+                                        placeholder="请输入物流单号">
+                                </div>
+                                
+                                <!-- 快递地址 -->
+                                <div class="md:col-span-2">
+                                    <label class="block text-sm font-medium text-neutral mb-1" for="address">
+                                        快递地址 <span class="text-red-500">*</span>
+                                    </label>
+                                    <textarea id="address" name="address" rows="3"
+                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg form-input-focus"
+                                        placeholder="请输入详细快递地址" required></textarea>
+                                </div>
+                            </div>
+                        </section>
+                        
+                        <!-- 操作按钮 -->
+                        <div class="flex flex-wrap gap-4 justify-center pt-4">
+                            <button type="button" id="generateBtn" class="btn-primary flex items-center">
+                                <i class="fa fa-file-text-o mr-2"></i>生成信息
+                            </button>
+                            <button type="button" id="exportExcelBtn" class="btn-secondary flex items-center">
+                                <i class="fa fa-download mr-2"></i>导出Excel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- 生成的信息展示区 -->
+                <div id="resultSection" class="bg-white rounded-xl shadow-md p-6 hidden card-hover">
+                    <h2 class="text-xl font-semibold text-dark mb-4 flex items-center">
+                        <i class="fa fa-info-circle text-primary mr-2"></i>生成的发货信息
+                    </h2>
+                    <div class="mb-4">
+                        <pre id="resultText" class="bg-light p-4 rounded-lg text-dark overflow-auto max-h-60"></pre>
+                    </div>
+                    <div class="flex justify-center gap-4">
+                        <button id="copyBtn" class="btn-primary flex items-center">
+                            <i class="fa fa-copy mr-2"></i>复制信息
+                        </button>
+                        <button id="addExcelBtn" class="btn-secondary flex items-center">
+                            <i class="fa fa-plus-circle mr-2"></i>添加到Excel
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 数据记录列表 -->
+                <div id="recordsSection" class="bg-white rounded-xl shadow-md p-6 hidden card-hover">
+                    <div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                        <h2 class="text-xl font-semibold text-dark flex items-center">
+                            <i class="fa fa-list-alt text-primary mr-2"></i>已记录数据
+                            <span class="ml-3 text-sm bg-gray-100 text-gray-600 px-2 py-1 rounded-full" id="recordCount">0 条记录</span>
+                        </h2>
+                        
+                        <!-- 搜索框 -->
+                        <div class="w-full md:w-auto">
+                            <div class="relative">
+                                <input type="text" id="searchInput" 
+                                    class="w-full md:w-64 pl-10 pr-4 py-2 border border-gray-300 rounded-lg form-input-focus"
+                                    placeholder="搜索记录...">
+                                <i class="fa fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 表格滚动容器 - 限制最多显示5行 -->
+                    <div class="table-scroll-container">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50 sticky top-0 z-10">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">产品类型</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">关键标识</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">转接头</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数量</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">记录时间</th>
+                                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recordsTableBody" class="bg-white divide-y divide-gray-200">
+                                    <!-- 数据记录将通过JavaScript动态添加 -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- 无记录提示 -->
+                    <div id="noRecordsMessage" class="py-10 text-center hidden">
+                        <i class="fa fa-folder-open-o text-gray-300 text-5xl mb-3"></i>
+                        <p class="text-gray-500">没有找到匹配的记录</p>
+                    </div>
+                </div>
+            </main>
+            
+            <!-- 记录详情模态框 -->
+            <div id="recordDetailModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+                <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto animate-fadeIn">
+                    <div class="p-6 border-b border-gray-200 flex justify-between items-center">
+                        <h3 class="text-xl font-semibold text-dark">记录详情</h3>
+                        <button id="closeModalBtn" class="text-gray-400 hover:text-gray-600">
+                            <i class="fa fa-times text-xl"></i>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <pre id="recordDetailContent" class="bg-light p-4 rounded-lg text-dark whitespace-pre-wrap"></pre>
+                    </div>
+                    <div class="p-4 border-t border-gray-200 flex justify-end">
+                        <button id="closeModalBtn2" class="btn-secondary">
+                            关闭
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 页脚 -->
+            <footer class="mt-12 text-center text-neutral text-sm">
+                <p>发货信息记录系统 &copy; 2025</p>
+            </footer>
+        </div>
+    </div>
+    
+    <!-- 通知提示 -->
+    <div id="notification" class="fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center"></div>
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
-# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
-jobs:
-  # Single deploy job since we're just deploying
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          # Upload entire repository
-          path: '.'
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+    <script>
+        // 密码设置 - 可以根据需要修改此密码
+        const CORRECT_PASSWORD = "moonnightwang"; // 默认密码，建议修改
+        
+        // 全局变量存储当前生成的信息和所有记录
+        let currentShippingInfo = null;
+        let allShippingRecords = [];
+        let recordIdCounter = 1; // 用于生成唯一ID
+        let searchQuery = '';
+        
+        // DOM元素
+        const passwordPage = document.getElementById('passwordPage');
+        const mainContent = document.getElementById('mainContent');
+        const passwordForm = document.getElementById('passwordForm');
+        const passwordInput = document.getElementById('password');
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordError = document.getElementById('passwordError');
+        const logoutBtn = document.getElementById('logoutBtn');
+        
+        const productTypeRadios = document.querySelectorAll('input[name="productType"]');
+        const adapterTypeSelect = document.getElementById('adapterType');
+        const customAdapterInput = document.getElementById('customAdapter');
+        const wifiConfig = document.getElementById('wifiConfig');
+        const bluetoothConfig = document.getElementById('bluetoothConfig');
+        const generateBtn = document.getElementById('generateBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const addExcelBtn = document.getElementById('addExcelBtn');
+        const exportExcelBtn = document.getElementById('exportExcelBtn');
+        const resultSection = document.getElementById('resultSection');
+        const resultText = document.getElementById('resultText');
+        const notification = document.getElementById('notification');
+        const recordsSection = document.getElementById('recordsSection');
+        const recordsTableBody = document.getElementById('recordsTableBody');
+        const recordCount = document.getElementById('recordCount');
+        const searchInput = document.getElementById('searchInput');
+        const noRecordsMessage = document.getElementById('noRecordsMessage');
+        const recordDetailModal = document.getElementById('recordDetailModal');
+        const recordDetailContent = document.getElementById('recordDetailContent');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const closeModalBtn2 = document.getElementById('closeModalBtn2');
+        
+        // 初始化应用
+        function initApp() {
+            // 检查用户是否已登录
+            if (localStorage.getItem('isLoggedIn') === 'true') {
+                showMainContent();
+            }
+            
+            // 密码表单提交事件
+            passwordForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                checkPassword();
+            });
+            
+            // 切换密码可见性
+            togglePassword.addEventListener('click', function() {
+                const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                passwordInput.setAttribute('type', type);
+                
+                // 切换图标
+                this.innerHTML = type === 'password' ? 
+                    '<i class="fa fa-eye-slash"></i>' : 
+                    '<i class="fa fa-eye"></i>';
+            });
+            
+            // 退出登录事件
+            logoutBtn.addEventListener('click', function() {
+                if (confirm('确定要退出登录吗？')) {
+                    localStorage.setItem('isLoggedIn', 'false');
+                    showPasswordPage();
+                }
+            });
+            
+            // 尝试从localStorage加载已保存的记录
+            const savedRecords = localStorage.getItem('shippingRecords');
+            const savedCounter = localStorage.getItem('recordIdCounter');
+            
+            if (savedRecords) {
+                allShippingRecords = JSON.parse(savedRecords);
+                updateRecordsTable();
+                if (allShippingRecords.length > 0) {
+                    recordsSection.classList.remove('hidden');
+                }
+                updateRecordCount();
+            }
+            
+            if (savedCounter) {
+                recordIdCounter = parseInt(savedCounter);
+            }
+            
+            // 添加搜索事件监听
+            searchInput.addEventListener('input', function(e) {
+                searchQuery = e.target.value.toLowerCase().trim();
+                updateRecordsTable();
+            });
+            
+            // 关闭模态框事件
+            closeModalBtn.addEventListener('click', closeDetailModal);
+            closeModalBtn2.addEventListener('click', closeDetailModal);
+            
+            // 点击模态框外部关闭
+            recordDetailModal.addEventListener('click', function(e) {
+                if (e.target === recordDetailModal) {
+                    closeDetailModal();
+                }
+            });
+        }
+        
+        // 检查密码
+        function checkPassword() {
+            const password = passwordInput.value.trim();
+            
+            if (password === CORRECT_PASSWORD) {
+                // 密码正确，保存登录状态
+                localStorage.setItem('isLoggedIn', 'true');
+                showMainContent();
+                passwordInput.value = '';
+                passwordError.classList.add('hidden');
+            } else {
+                // 密码错误，显示错误信息
+                passwordError.classList.remove('hidden');
+                passwordInput.classList.add('border-danger');
+                
+                // 3秒后移除错误状态
+                setTimeout(() => {
+                    passwordInput.classList.remove('border-danger');
+                }, 3000);
+            }
+        }
+        
+        // 显示密码页面
+        function showPasswordPage() {
+            passwordPage.classList.remove('hidden');
+            mainContent.classList.add('hidden');
+            document.body.style.backgroundColor = '';
+        }
+        
+        // 显示主内容
+        function showMainContent() {
+            passwordPage.classList.add('hidden');
+            mainContent.classList.remove('hidden');
+            document.body.classList.add('bg-gray-50');
+        }
+        
+        // 转接头类型变更事件
+        adapterTypeSelect.addEventListener('change', function() {
+            if (this.value === '自定义') {
+                customAdapterInput.classList.remove('hidden');
+                customAdapterInput.required = true;
+            } else {
+                customAdapterInput.classList.add('hidden');
+                customAdapterInput.required = false;
+            }
+        });
+        
+        // 产品类型切换事件
+        productTypeRadios.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.value === 'wifi') {
+                    wifiConfig.classList.remove('hidden');
+                    bluetoothConfig.classList.add('hidden');
+                } else {
+                    wifiConfig.classList.add('hidden');
+                    bluetoothConfig.classList.remove('hidden');
+                }
+            });
+        });
+        
+        // 生成信息按钮点击事件
+        generateBtn.addEventListener('click', function() {
+            if (validateForm()) {
+                generateShippingInfo();
+                // 显示结果区域
+                resultSection.classList.remove('hidden');
+                
+                // 添加显示动画
+                resultSection.classList.add('animate-fadeIn');
+                setTimeout(() => {
+                    resultSection.classList.remove('animate-fadeIn');
+                }, 300);
+                
+                showNotification('信息已生成', 'success');
+            }
+        });
+        
+        // 复制按钮点击事件
+        copyBtn.addEventListener('click', function() {
+            if (currentShippingInfo) {
+                // 创建临时文本区域用于复制
+                const tempTextArea = document.createElement('textarea');
+                tempTextArea.value = currentShippingInfo.text;
+                tempTextArea.style.position = 'absolute';
+                tempTextArea.style.left = '-9999px';
+                document.body.appendChild(tempTextArea);
+                
+                try {
+                    // 选择文本并复制
+                    tempTextArea.select();
+                    tempTextArea.setSelectionRange(0, 99999); // 适配移动设备
+                    
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                        showNotification('信息已成功复制到剪贴板', 'success');
+                    } else {
+                        // 降级处理 - 使用clipboard API
+                        navigator.clipboard.writeText(currentShippingInfo.text)
+                            .then(() => showNotification('信息已成功复制到剪贴板', 'success'))
+                            .catch(() => showNotification('复制失败，请手动复制', 'error'));
+                    }
+                } catch (err) {
+                    showNotification('复制失败，请手动复制', 'error');
+                    console.error('复制失败:', err);
+                } finally {
+                    document.body.removeChild(tempTextArea);
+                }
+            }
+        });
+        
+        // 添加到Excel按钮点击事件
+        addExcelBtn.addEventListener('click', function() {
+            if (currentShippingInfo) {
+                // 生成唯一标识用于判断重复
+                let uniqueKey = '';
+                if (currentShippingInfo.productType === 'wifi') {
+                    uniqueKey = `wifi-${currentShippingInfo.wifiMac}-${currentShippingInfo.address}-${currentShippingInfo.adapter}`;
+                } else {
+                    uniqueKey = `bluetooth-${currentShippingInfo.bluetoothData}-${currentShippingInfo.address}-${currentShippingInfo.adapter}`;
+                }
+                
+                // 查找是否有相同的记录
+                const existingIndex = allShippingRecords.findIndex(record => {
+                    if (record.productType === 'wifi') {
+                        return `wifi-${record.wifiMac}-${record.address}-${record.adapter}` === uniqueKey;
+                    } else {
+                        return `bluetooth-${record.bluetoothData}-${record.address}-${record.adapter}` === uniqueKey;
+                    }
+                });
+                
+                // 为当前记录添加唯一ID
+                currentShippingInfo.id = recordIdCounter++;
+                
+                if (existingIndex !== -1) {
+                    // 替换现有记录
+                    allShippingRecords[existingIndex] = currentShippingInfo;
+                    showNotification('相同记录已更新为最新版本', 'success');
+                } else {
+                    // 添加新记录
+                    allShippingRecords.push(currentShippingInfo);
+                    showNotification('数据已添加到记录', 'success');
+                }
+                
+                // 保存到localStorage
+                saveRecordsToLocalStorage();
+                
+                // 更新表格显示
+                updateRecordsTable();
+                recordsSection.classList.remove('hidden');
+                updateRecordCount();
+            }
+        });
+        
+        // 导出Excel按钮点击事件
+        exportExcelBtn.addEventListener('click', function() {
+            if (allShippingRecords.length === 0) {
+                showNotification('没有可导出的记录，请先添加数据', 'error');
+                return;
+            }
+            
+            // 创建工作簿
+            const wb = XLSX.utils.book_new();
+            
+            // 准备导出数据 - 转换为适合Excel的格式
+            const exportData = allShippingRecords.map(record => {
+                return {
+                    'ID': record.id,
+                    '产品类型': record.productType === 'wifi' ? 'WIFI' : '蓝牙',
+                    '数量': record.quantity,
+                    '转接头': record.adapter || '无',
+                    'WIFI名称': record.wifiName || '',
+                    'WIFI MAC': record.wifiMac || '',
+                    '蓝牙名称': record.bluetoothName || '',
+                    '蓝牙MAC': record.bluetoothMac || '',
+                    '蓝牙数据': record.bluetoothData || '',
+                    '快递方式': record.deliveryMethod === 'shentong' ? '申通' : '顺丰',
+                    '打包方式': record.packingMethod === 'foam' ? '泡沫袋' : '盒子',
+                    '物流单号': record.trackingNumber || '',
+                    '快递地址': record.address,
+                    '记录时间': record.timestamp
+                };
+            });
+            
+            // 创建工作表
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            
+            // 将工作表添加到工作簿
+            XLSX.utils.book_append_sheet(wb, ws, "发货记录");
+            
+            // 生成并下载Excel文件
+            const fileName = `发货记录_${new Date().toLocaleDateString().replace(/\//g, '-')}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            
+            showNotification(`Excel文件已导出: ${fileName}`, 'success');
+        });
+        
+        // 保存记录到localStorage
+        function saveRecordsToLocalStorage() {
+            localStorage.setItem('shippingRecords', JSON.stringify(allShippingRecords));
+            localStorage.setItem('recordIdCounter', recordIdCounter.toString());
+        }
+        
+        // 更新记录表格
+        function updateRecordsTable() {
+            // 清空表格
+            recordsTableBody.innerHTML = '';
+            
+            // 按时间倒序显示记录
+            let sortedRecords = [...allShippingRecords].sort((a, b) => 
+                new Date(b.timestamp) - new Date(a.timestamp)
+            );
+            
+            // 应用搜索过滤
+            if (searchQuery) {
+                sortedRecords = sortedRecords.filter(record => {
+                    // 构建搜索内容字符串
+                    let searchContent = `${record.productType === 'wifi' ? 'WIFI' : '蓝牙'} `;
+                    searchContent += `${record.quantity} `;
+                    searchContent += `${record.adapter || ''} `;
+                    searchContent += `${record.wifiName || ''} `;
+                    searchContent += `${record.wifiMac || ''} `;
+                    searchContent += `${record.bluetoothName || ''} `;
+                    searchContent += `${record.bluetoothMac || ''} `;
+                    searchContent += `${record.bluetoothData || ''} `;
+                    searchContent += `${record.deliveryMethod === 'shentong' ? '申通' : '顺丰'} `;
+                    searchContent += `${record.packingMethod === 'foam' ? '泡沫袋' : '盒子'} `;
+                    searchContent += `${record.trackingNumber || ''} `;
+                    searchContent += `${record.address} `;
+                    searchContent += `${record.timestamp}`;
+                    
+                    return searchContent.toLowerCase().includes(searchQuery);
+                });
+            }
+            
+            // 显示或隐藏无记录提示
+            if (sortedRecords.length === 0) {
+                noRecordsMessage.classList.remove('hidden');
+            } else {
+                noRecordsMessage.classList.add('hidden');
+                
+                // 添加记录到表格
+                sortedRecords.forEach(record => {
+                    const row = document.createElement('tr');
+                    row.className = 'hover:bg-gray-50 transition-colors';
+                    
+                    // 确定关键标识（MAC地址或蓝牙数据）
+                    const keyIdentifier = record.productType === 'wifi' 
+                        ? record.wifiMac 
+                        : record.bluetoothData;
+                    
+                    row.innerHTML = `
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">${record.productType === 'wifi' ? 'WIFI' : '蓝牙'}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 truncate max-w-xs">${keyIdentifier}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="text-sm text-gray-900 truncate max-w-xs">${record.adapter}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">${record.quantity}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">${record.timestamp}</div>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                            <button class="text-primary hover:text-primary/80 view-record mr-3" data-id="${record.id}">
+                                <i class="fa fa-eye"></i> 查看
+                            </button>
+                            <button class="text-red-600 hover:text-red-900 delete-record" data-id="${record.id}">
+                                <i class="fa fa-trash-o"></i> 删除
+                            </button>
+                        </td>
+                    `;
+                    
+                    recordsTableBody.appendChild(row);
+                });
+                
+                // 为查看和删除按钮添加事件
+                document.querySelectorAll('.view-record').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const id = parseInt(this.getAttribute('data-id'));
+                        viewRecordDetail(id);
+                    });
+                });
+                
+                document.querySelectorAll('.delete-record').forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        const id = parseInt(this.getAttribute('data-id'));
+                        deleteRecord(id);
+                    });
+                });
+            }
+        }
+        
+        // 查看记录详情
+        function viewRecordDetail(id) {
+            const record = allShippingRecords.find(r => r.id === id);
+            if (record) {
+                recordDetailContent.textContent = record.text;
+                recordDetailModal.classList.remove('hidden');
+                // 防止背景滚动
+                document.body.style.overflow = 'hidden';
+            }
+        }
+        
+        // 关闭详情模态框
+        function closeDetailModal() {
+            recordDetailModal.classList.add('hidden');
+            // 恢复背景滚动
+            document.body.style.overflow = '';
+        }
+        
+        // 更新记录计数
+        function updateRecordCount() {
+            recordCount.textContent = `${allShippingRecords.length} 条记录`;
+        }
+        
+        // 删除记录
+        function deleteRecord(id) {
+            if (confirm('确定要删除这条记录吗？')) {
+                allShippingRecords = allShippingRecords.filter(record => record.id !== id);
+                saveRecordsToLocalStorage();
+                updateRecordsTable();
+                updateRecordCount();
+                
+                if (allShippingRecords.length === 0) {
+                    recordsSection.classList.add('hidden');
+                }
+                
+                showNotification('记录已删除', 'success');
+            }
+        }
+        
+        // 表单验证 - 强化了转接头的验证
+        function validateForm() {
+            const productType = document.querySelector('input[name="productType"]:checked').value;
+            const quantity = document.getElementById('quantity').value;
+            const address = document.getElementById('address').value;
+            const adapterType = adapterTypeSelect.value;
+            
+            // 基本验证
+            if (!quantity || quantity < 1) {
+                showNotification('请输入有效的数量', 'error');
+                return false;
+            }
+            
+            if (!address.trim()) {
+                showNotification('请输入快递地址', 'error');
+                return false;
+            }
+            
+            // 转接头验证（已设置为必填）
+            if (!adapterType) {
+                showNotification('请选择转接头类型', 'error');
+                return false;
+            }
+            
+            // 转接头自定义验证
+            if (adapterType === '自定义' && !customAdapterInput.value.trim()) {
+                showNotification('请输入自定义转接头信息', 'error');
+                return false;
+            }
+            
+            // 产品特定验证
+            if (productType === 'wifi') {
+                const wifiName = document.getElementById('wifiName').value;
+                const wifiMac = document.getElementById('wifiMac').value;
+                
+                if (!wifiName.trim()) {
+                    showNotification('请输入WIFI名称', 'error');
+                    return false;
+                }
+                
+                if (!wifiMac.trim()) {
+                    showNotification('请输入WIFI MAC地址', 'error');
+                    return false;
+                }
+            } else {
+                // 蓝牙验证 - 仅验证必填的蓝牙数据
+                const bluetoothData = document.getElementById('bluetoothData').value;
+                
+                if (!bluetoothData.trim()) {
+                    showNotification('请输入蓝牙数据', 'error');
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+        
+        // 生成发货信息 - 不仅生成文本，还生成结构化数据
+        function generateShippingInfo() {
+            const productType = document.querySelector('input[name="productType"]:checked').value;
+            const adapterType = adapterTypeSelect.value;
+            const customAdapter = customAdapterInput.value;
+            const quantity = document.getElementById('quantity').value;
+            const deliveryMethod = document.querySelector('input[name="deliveryMethod"]:checked').value;
+            const packingMethod = document.querySelector('input[name="packingMethod"]:checked').value;
+            const trackingNumber = document.getElementById('trackingNumber').value;
+            const address = document.getElementById('address').value;
+            const timestamp = new Date().toLocaleString();
+            
+            // 构建文本格式信息
+            let infoText = `产品类型: ${productType === 'wifi' ? 'WIFI' : '蓝牙'}\n`;
+            infoText += `数量: ${quantity}\n`;
+            
+            // 转接头信息（已设为必填）
+            let adapterInfo = '';
+            if (adapterType === '自定义' && customAdapter.trim()) {
+                infoText += `转接头: 自定义-${customAdapter}\n`;
+                adapterInfo = `自定义-${customAdapter}`;
+            } else {
+                infoText += `转接头: ${adapterType}\n`;
+                adapterInfo = adapterType;
+            }
+            
+            // 产品配置信息
+            let wifiName = '', wifiMac = '', bluetoothName = '', bluetoothMac = '', bluetoothData = '';
+            
+            if (productType === 'wifi') {
+                wifiName = document.getElementById('wifiName').value;
+                wifiMac = document.getElementById('wifiMac').value;
+                infoText += `WIFI名称: ${wifiName}\n`;
+                infoText += `WIFI MAC: ${wifiMac}\n`;
+            } else {
+                bluetoothName = document.getElementById('bluetoothName').value;
+                bluetoothMac = document.getElementById('bluetoothMac').value;
+                bluetoothData = document.getElementById('bluetoothData').value;
+                
+                if (bluetoothName.trim()) {
+                    infoText += `蓝牙名称: ${bluetoothName}\n`;
+                }
+                if (bluetoothMac.trim()) {
+                    infoText += `蓝牙MAC: ${bluetoothMac}\n`;
+                }
+                infoText += `蓝牙数据: ${bluetoothData}\n`;
+            }
+            
+            // 物流信息
+            const deliveryMethodText = deliveryMethod === 'shentong' ? '申通' : '顺丰';
+            const packingMethodText = packingMethod === 'foam' ? '泡沫袋' : '盒子';
+            
+            infoText += `快递方式: ${deliveryMethodText}\n`;
+            infoText += `打包方式: ${packingMethodText}\n`;
+            
+            // 物流单号（如果有）
+            if (trackingNumber.trim()) {
+                infoText += `物流单号: ${trackingNumber}\n`;
+            }
+            
+            infoText += `快递地址: ${address}\n`;
+            infoText += `记录时间: ${timestamp}`;
+            
+            // 构建结构化数据（用于Excel导出）
+            const structuredData = {
+                productType,
+                quantity,
+                adapter: adapterInfo,
+                wifiName,
+                wifiMac,
+                bluetoothName,
+                bluetoothMac,
+                bluetoothData,
+                deliveryMethod,
+                packingMethod,
+                trackingNumber,
+                address,
+                timestamp,
+                text: infoText
+            };
+            
+            // 更新UI和全局变量
+            resultText.textContent = infoText;
+            currentShippingInfo = structuredData;
+        }
+        
+        // 显示通知
+        function showNotification(message, type) {
+            const notificationEl = document.getElementById('notification');
+            
+            // 设置样式
+            if (type === 'success') {
+                notificationEl.className = 'fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform translate-y-0 opacity-100 transition-all duration-300 flex items-center bg-green-50 text-green-800 border border-green-200';
+                notificationEl.innerHTML = '<i class="fa fa-check-circle mr-2"></i>' + message;
+            } else {
+                notificationEl.className = 'fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform translate-y-0 opacity-100 transition-all duration-300 flex items-center bg-red-50 text-red-800 border border-red-200';
+                notificationEl.innerHTML = '<i class="fa fa-exclamation-circle mr-2"></i>' + message;
+            }
+            
+            // 3秒后隐藏
+            setTimeout(() => {
+                notificationEl.className = 'fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center';
+            }, 3000);
+        }
+        
+        // 页面加载时初始化
+        window.addEventListener('load', initApp);
+    </script>
+</body>
+</html>
+    
